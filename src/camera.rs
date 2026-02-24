@@ -3,6 +3,7 @@ use gstreamer::prelude::*;
 use gstreamer_app::AppSink;
 use gtk4::prelude::*;
 use std::time::Duration;
+use std::collections::HashMap;
 
 use crate::overlay::FrameStore;
 
@@ -116,40 +117,68 @@ impl CameraPipeline {
             return vec![];
         }
 
-        let devices: Vec<CameraDevice> = monitor
-            .devices()
-            .iter()
-            .map(|device| {
-                let name = device.display_name().to_string();
-                let path = device
-                    .properties()
-                    .and_then(|props| props.get::<String>("device.path").ok())
-                    .unwrap_or_else(|| "/dev/video0".to_string());
+        let mut by_path: HashMap<String, CameraDevice> = HashMap::new();
 
-                let max_resolution = device.caps().and_then(|caps| {
-                    let mut best: Option<(i64, u32, u32)> = None;
-                    for s in caps.iter() {
-                        let name = s.name().as_str();
-                        if name != "video/x-raw" && name != "image/jpeg" { continue; }
-                        let w = s.get::<i32>("width")
-                            .or_else(|_| s.get::<gst::IntRange<i32>>("width").map(|r| r.max()))
-                            .ok()?;
-                        let h = s.get::<i32>("height")
-                            .or_else(|_| s.get::<gst::IntRange<i32>>("height").map(|r| r.max()))
-                            .ok()?;
-                        let area = w as i64 * h as i64;
-                        if best.map_or(true, |b| area > b.0) {
-                            best = Some((area, w as u32, h as u32));
-                        }
-                    }
-                    best.map(|(_, w, h)| (w, h))
+        for device in monitor.devices() {
+            let props = match device.properties() { Some(p) => p, None => continue };
+
+            // Extract path — try multiple property names
+            let path = props.get::<String>("api.v4l2.path")
+                .ok()
+                .or_else(|| props.get::<String>("device.path").ok())
+                .or_else(|| {
+                    props.get::<String>("object.path").ok()
+                        .and_then(|p| p.strip_prefix("v4l2:").map(|s| s.to_string()))
                 });
 
-                CameraDevice { name, path, max_resolution }
-            })
-            .collect();
+            let path = match path {
+                Some(p) if p.starts_with("/dev/video") => p,
+                _ => continue, // skip devices without a real v4l2 path
+            };
+
+            // Clean display name
+            let name = props.get::<String>("node.nick")
+                .ok()
+                .unwrap_or_else(|| device.display_name().to_string());
+
+            // Max resolution from caps (existing logic)
+            let max_resolution = device.caps().and_then(|caps| {
+                let mut best: Option<(i64, u32, u32)> = None;
+                for s in caps.iter() {
+                    let sname = s.name().as_str();
+                    if sname != "video/x-raw" && sname != "image/jpeg" { continue; }
+                    let w = s.get::<i32>("width")
+                        .or_else(|_| s.get::<gst::IntRange<i32>>("width").map(|r| r.max()))
+                        .ok()?;
+                    let h = s.get::<i32>("height")
+                        .or_else(|_| s.get::<gst::IntRange<i32>>("height").map(|r| r.max()))
+                        .ok()?;
+                    let area = w as i64 * h as i64;
+                    if best.map_or(true, |b| area > b.0) {
+                        best = Some((area, w as u32, h as u32));
+                    }
+                }
+                best.map(|(_, w, h)| (w, h))
+            });
+
+            // Deduplicate by path: if we already have this path, keep the entry with resolution
+            let entry = by_path.entry(path.clone()).or_insert(CameraDevice {
+                name: name.clone(), path: path.clone(), max_resolution
+            });
+            // Update: if new entry has resolution and existing doesn't, take it
+            if entry.max_resolution.is_none() && max_resolution.is_some() {
+                entry.max_resolution = max_resolution;
+            }
+            // Update: if new name is cleaner (no "(V4L2)" or trailing ":"), prefer it
+            if (entry.name.contains("(V4L2)") || entry.name.ends_with(':'))
+                && !name.contains("(V4L2)") && !name.ends_with(':') {
+                entry.name = name;
+            }
+        }
 
         monitor.stop();
+        let mut devices: Vec<CameraDevice> = by_path.into_values().collect();
+        devices.sort_by(|a, b| a.path.cmp(&b.path));
         devices
     }
 
@@ -168,7 +197,11 @@ impl CameraPipeline {
         let result = monitor.devices().iter().find_map(|device| {
             let path = device
                 .properties()
-                .and_then(|props| props.get::<String>("device.path").ok())?;
+                .and_then(|props| {
+                    props.get::<String>("api.v4l2.path")
+                        .ok()
+                        .or_else(|| props.get::<String>("device.path").ok())
+                })?;
             if path != device_path {
                 return None;
             }

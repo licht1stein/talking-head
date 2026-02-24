@@ -51,10 +51,11 @@ impl OverlayWindow {
         window.set_namespace(Some("portrait"));
 
         // Anchor Top+Left so margins position relative to output top-left
+        // Anchor Top+Right so we position from the upper-right corner
         window.set_anchor(Edge::Top, true);
-        window.set_anchor(Edge::Left, true);
-        window.set_margin(Edge::Top, 0);
-        window.set_margin(Edge::Left, 0);
+        window.set_anchor(Edge::Right, true);
+        window.set_margin(Edge::Top, 20);
+        window.set_margin(Edge::Right, 20);
 
         // Add CSS class for transparent background
         window.add_css_class("portrait-overlay");
@@ -112,7 +113,7 @@ impl OverlayWindow {
         });
 
         // Shared mutable position state for drag gesture closures
-        let position = Rc::new(RefCell::new((0i32, 0i32)));
+        let position = Rc::new(RefCell::new((20i32, 20i32)));  // (right_margin, top_margin)
         let drag_start = Rc::new(RefCell::new((0i32, 0i32)));
 
         // Set up drag-to-reposition gesture on the drawing area
@@ -130,11 +131,11 @@ impl OverlayWindow {
         let ds_for_update = drag_start.clone();
         let win_for_update = window.clone();
         gesture.connect_drag_update(move |_, offset_x, offset_y| {
-            let (start_x, start_y) = *ds_for_update.borrow();
-            let new_x = (start_x + offset_x as i32).clamp(0, 3840);
+            let (start_right, start_y) = *ds_for_update.borrow();
+            let new_right = (start_right - offset_x as i32).clamp(0, 3840);
             let new_y = (start_y + offset_y as i32).clamp(0, 2160);
-            *pos_for_update.borrow_mut() = (new_x, new_y);
-            win_for_update.set_margin(Edge::Left, new_x);
+            *pos_for_update.borrow_mut() = (new_right, new_y);
+            win_for_update.set_margin(Edge::Right, new_right);
             win_for_update.set_margin(Edge::Top, new_y);
         });
 
@@ -142,11 +143,11 @@ impl OverlayWindow {
         let ds_for_end = drag_start.clone();
         let win_for_end = window.clone();
         gesture.connect_drag_end(move |_, offset_x, offset_y| {
-            let (start_x, start_y) = *ds_for_end.borrow();
-            let new_x = (start_x + offset_x as i32).clamp(0, 3840);
+            let (start_right, start_y) = *ds_for_end.borrow();
+            let new_right = (start_right - offset_x as i32).clamp(0, 3840);
             let new_y = (start_y + offset_y as i32).clamp(0, 2160);
-            *pos_for_end.borrow_mut() = (new_x, new_y);
-            win_for_end.set_margin(Edge::Left, new_x);
+            *pos_for_end.borrow_mut() = (new_right, new_y);
+            win_for_end.set_margin(Edge::Right, new_right);
             win_for_end.set_margin(Edge::Top, new_y);
         });
 
@@ -168,8 +169,8 @@ impl OverlayWindow {
         if visible {
             self.window.present();
             // Restore position margins after present
-            let (x, y) = *self.position.borrow();
-            self.window.set_margin(Edge::Left, x);
+            let (right, y) = *self.position.borrow();
+            self.window.set_margin(Edge::Right, right);
             self.window.set_margin(Edge::Top, y);
         } else {
             self.window.set_visible(false);
