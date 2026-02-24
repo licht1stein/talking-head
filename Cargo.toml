@@ -1,0 +1,19 @@
+[package]
+name = "portrait"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gtk4 = { version = "0.10", features = ["v4_12"] }
+gdk4 = { version = "0.10" }
+glib = { version = "0.21" }
+gio = { version = "0.21" }
+gstreamer = { version = "0.23" }
+gstreamer-video = { version = "0.23" }
+gstreamer-app = { version = "0.23" }
+gtk4-layer-shell = { version = "0.7" }
+ksni = { version = "0.2" }
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+nix = { version = "0.29", features = ["process", "signal", "fs"] }

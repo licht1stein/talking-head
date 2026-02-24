@@ -1,0 +1,11 @@
+/* Portrait - webcam circle overlay */
+.portrait-circle {
+    border-radius: 50%;
+    overflow: hidden;
+    background: transparent;
+}
+
+window.portrait-overlay {
+    background: transparent;
+    border: none;
+}
