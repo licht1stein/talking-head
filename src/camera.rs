@@ -1,7 +1,10 @@
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app::AppSink;
+use gtk4::prelude::*;
 use std::time::Duration;
+
+use crate::overlay::FrameStore;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CameraDevice {
@@ -31,39 +34,27 @@ impl CameraPipeline {
         })
     }
 
-    /// Return a paintable from the sink element, if available.
-    ///
-    /// With the appsink approach, frames are pushed to a `gtk4::Picture` via
-    /// `setup_frame_callback()` instead. This returns `None`.
-    #[allow(dead_code)]
-    pub fn paintable(&self) -> Option<gdk4::Paintable> {
-        None
-    }
-
-    /// Set up a polling loop that pulls frames from the appsink and updates
-    /// the given `gtk4::Picture` with a `gdk4::MemoryTexture` each frame.
+    /// Set up a polling loop that pulls frames from the appsink and writes
+    /// BGRA data into the shared `frame_store`, then triggers a redraw on the
+    /// `DrawingArea`.
     ///
     /// The closure runs on the GTK main thread via `glib::timeout_add_local`
     /// at ~30fps (~33ms interval).
-    pub fn setup_frame_callback(&self, picture: &gtk4::Picture) {
+    pub fn setup_frame_callback(
+        &self,
+        frame_store: FrameStore,
+        drawing_area: gtk4::DrawingArea,
+    ) {
         let appsink = self.appsink.clone();
-        let size = self.size;
-        let picture = picture.clone();
+        let size = self.size as i32;
 
         glib::timeout_add_local(Duration::from_millis(33), move || {
             // Non-blocking pull: ClockTime::ZERO means don't wait
             if let Some(sample) = appsink.try_pull_sample(gst::ClockTime::ZERO) {
                 if let Some(buffer) = sample.buffer() {
                     if let Ok(map) = buffer.map_readable() {
-                        let bytes = glib::Bytes::from(map.as_slice());
-                        let texture = gdk4::MemoryTexture::new(
-                            size as i32,
-                            size as i32,
-                            gdk4::MemoryFormat::R8g8b8a8,
-                            &bytes,
-                            (size * 4) as usize, // stride = width * 4 bytes (RGBA)
-                        );
-                        picture.set_paintable(Some(&texture));
+                        *frame_store.borrow_mut() = Some((map.as_slice().to_vec(), size));
+                        drawing_area.queue_draw();
                     }
                 }
             }
@@ -147,7 +138,7 @@ impl CameraPipeline {
     fn build_pipeline(device_path: &str, size: u32) -> Result<(gst::Pipeline, AppSink), String> {
         let pipeline_desc = format!(
             "v4l2src device={device_path} ! videoconvert ! videoscale ! \
-             video/x-raw,format=RGBA,width={size},height={size} ! \
+             video/x-raw,format=BGRA,width={size},height={size} ! \
              appsink name=sink max-buffers=1 drop=true sync=false"
         );
 

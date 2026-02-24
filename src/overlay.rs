@@ -9,9 +9,13 @@ const DEFAULT_SIZE: u32 = 200;
 
 const CSS: &str = include_str!("style.css");
 
+/// Shared frame buffer: (BGRA pixel data, side length in px).
+pub type FrameStore = Rc<RefCell<Option<(Vec<u8>, i32)>>>;
+
 pub struct OverlayWindow {
     window: gtk4::Window,
-    picture: gtk4::Picture,
+    drawing_area: gtk4::DrawingArea,
+    frame_store: FrameStore,
     size: u32,
     visible: bool,
     position: Rc<RefCell<(i32, i32)>>,
@@ -45,24 +49,61 @@ impl OverlayWindow {
         window.set_exclusive_zone(-1);
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_namespace(Some("portrait"));
-        // No anchors = floating window (default is unanchored)
+
+        // Anchor Top+Left so margins position relative to output top-left
+        window.set_anchor(Edge::Top, true);
+        window.set_anchor(Edge::Left, true);
+        window.set_margin(Edge::Top, 0);
+        window.set_margin(Edge::Left, 0);
 
         // Add CSS class for transparent background
         window.add_css_class("portrait-overlay");
 
-        // Create circular container + picture
-        let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-        container.add_css_class("portrait-circle");
-        container.set_halign(gtk4::Align::Center);
-        container.set_valign(gtk4::Align::Center);
+        // Shared frame store for DrawingArea ↔ camera callback
+        let frame_store: FrameStore = Rc::new(RefCell::new(None));
 
-        let picture = gtk4::Picture::new();
-        picture.set_content_fit(gtk4::ContentFit::Cover);
-        picture.set_hexpand(true);
-        picture.set_vexpand(true);
-        container.append(&picture);
+        // Create DrawingArea instead of Picture for manual Cairo clipping
+        let drawing_area = gtk4::DrawingArea::new();
+        drawing_area.set_size_request(DEFAULT_SIZE as i32, DEFAULT_SIZE as i32);
 
-        window.set_child(Some(&container));
+        // Draw function: clip to circle, paint video frame
+        let frame_store_draw = Rc::clone(&frame_store);
+        drawing_area.set_draw_func(move |_, cr, width, height| {
+            // Clip to inscribed circle
+            let r = (width.min(height) as f64) / 2.0;
+            let cx = width as f64 / 2.0;
+            let cy = height as f64 / 2.0;
+            cr.arc(cx, cy, r, 0.0, 2.0 * std::f64::consts::PI);
+            cr.clip();
+
+            // Placeholder background (dark grey)
+            cr.set_source_rgb(0.2, 0.2, 0.2);
+            let _ = cr.paint();
+
+            // Paint video frame if available
+            if let Some((data, side)) = frame_store_draw.borrow().as_ref() {
+                let side = *side;
+                let stride = side * 4; // BGRA = 4 bytes/pixel
+                                       // Cairo ARgb32 on little-endian = BGRA bytes in memory
+                if let Ok(surface) = gdk4::cairo::ImageSurface::create_for_data(
+                    data.clone(),
+                    gdk4::cairo::Format::ARgb32,
+                    side,
+                    side,
+                    stride,
+                ) {
+                    // Scale to widget size if needed
+                    if side != width {
+                        let scale = width as f64 / side as f64;
+                        cr.scale(scale, scale);
+                    }
+                    let _ = cr.set_source_surface(&surface, 0.0, 0.0);
+                    let _ = cr.paint();
+                }
+            }
+        });
+
+        window.set_child(Some(&drawing_area));
 
         // Set circular input region after window is realized (surface exists)
         let size = DEFAULT_SIZE;
@@ -74,8 +115,9 @@ impl OverlayWindow {
         let position = Rc::new(RefCell::new((0i32, 0i32)));
         let drag_start = Rc::new(RefCell::new((0i32, 0i32)));
 
-        // Set up drag-to-reposition gesture on the container
+        // Set up drag-to-reposition gesture on the drawing area
         let gesture = gtk4::GestureDrag::new();
+        gesture.set_propagation_phase(gtk4::PropagationPhase::Capture);
 
         let pos_for_begin = position.clone();
         let ds_for_begin = drag_start.clone();
@@ -108,11 +150,12 @@ impl OverlayWindow {
             win_for_end.set_margin(Edge::Top, new_y);
         });
 
-        container.add_controller(gesture);
+        drawing_area.add_controller(gesture);
 
         OverlayWindow {
             window,
-            picture,
+            drawing_area,
+            frame_store,
             size: DEFAULT_SIZE,
             visible: false,
             position,
@@ -137,30 +180,31 @@ impl OverlayWindow {
         self.size = size;
         let s = size as i32;
         self.window.set_default_size(s, s);
+        self.drawing_area.set_size_request(s, s);
 
-        // Update the min-size on the container via inline CSS isn't needed —
-        // the window default size drives it. But we do need to update the input region.
+        // Update the input region
         if let Some(surface) = self.window.surface() {
             set_circular_input_region_on_surface(&surface, size);
         }
     }
 
-    #[allow(dead_code)]
-    pub fn set_paintable(&self, paintable: gdk4::Paintable) {
-        self.picture.set_paintable(Some(&paintable));
+    pub fn drawing_area(&self) -> &gtk4::DrawingArea {
+        &self.drawing_area
+    }
+
+    pub fn frame_store(&self) -> FrameStore {
+        Rc::clone(&self.frame_store)
     }
 
     #[allow(dead_code)]
     pub fn window(&self) -> &gtk4::Window {
         &self.window
     }
-    pub fn picture(&self) -> &gtk4::Picture {
-        &self.picture
-    }
 
-    /// Clear the picture paintable, showing the CSS background as placeholder.
+    /// Clear the frame store and redraw, showing the placeholder background.
     pub fn show_placeholder(&self) {
-        self.picture.set_paintable(None::<&gdk4::Paintable>);
+        *self.frame_store.borrow_mut() = None;
+        self.drawing_area.queue_draw();
     }
 
     pub fn get_position(&self) -> (i32, i32) {

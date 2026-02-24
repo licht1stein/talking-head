@@ -61,8 +61,8 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
                 if let Err(e) = cam.start() {
                     eprintln!("portrait: failed to start camera: {}", e);
                 }
-                // Connect appsink frames to the overlay picture
-                cam.setup_frame_callback(overlay.picture());
+                // Connect appsink frames to the overlay drawing area
+                cam.setup_frame_callback(overlay.frame_store(), overlay.drawing_area().clone());
                 Some(cam)
             }
             Err(e) => {
@@ -268,11 +268,18 @@ fn dispatch_command(
         Command::Select => {
             let device_rc = Rc::clone(device);
             let camera_rc = Rc::clone(camera);
+            let overlay_rc = Rc::clone(overlay);
             let app_clone = app.clone();
             glib::idle_add_local_once(move || {
                 crate::dialog::show_device_picker(&app_clone, move |path| {
                     if let Some(ref mut cam) = *camera_rc.borrow_mut() {
-                        let _ = cam.set_device(&path);
+                        if cam.set_device(&path).is_ok() {
+                            // Re-wire frame callback to new appsink
+                            cam.setup_frame_callback(
+                                overlay_rc.borrow().frame_store(),
+                                overlay_rc.borrow().drawing_area().clone(),
+                            );
+                        }
                     }
                     *device_rc.borrow_mut() = path;
                 });
@@ -303,7 +310,7 @@ fn schedule_reconnect(
         let size_px = *size.borrow();
         match CameraPipeline::new(&device_path, size_px) {
             Ok(cam) => {
-                cam.setup_frame_callback(overlay.borrow().picture());
+                cam.setup_frame_callback(overlay.borrow().frame_store(), overlay.borrow().drawing_area().clone());
                 if let Err(e) = cam.start() {
                     eprintln!("portrait: reconnect start failed: {}", e);
                     overlay.borrow().show_placeholder();

@@ -1,11 +1,5 @@
 /* Portrait - webcam circle overlay */
-.portrait-circle {
-    border-radius: 50%;
-    overflow: hidden;
-    background-color: #333333; /* dark grey placeholder when no camera */
-    min-width: 200px;
-    min-height: 200px;
-}
+/* .portrait-circle is no longer used — clipping is done via Cairo in DrawingArea */
 
 window.portrait-overlay {
     background: transparent;
