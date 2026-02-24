@@ -155,6 +155,11 @@ impl OverlayWindow {
         &self.picture
     }
 
+    /// Clear the picture paintable, showing the CSS background as placeholder.
+    pub fn show_placeholder(&self) {
+        self.picture.set_paintable(None::<&gdk4::Paintable>);
+    }
+
     pub fn get_position(&self) -> (i32, i32) {
         *self.position.borrow()
     }

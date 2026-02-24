@@ -67,6 +67,7 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
             }
             Err(e) => {
                 eprintln!("portrait: failed to create camera pipeline: {}", e);
+                overlay.show_placeholder();
                 None
             }
         };
@@ -81,6 +82,46 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
         let visible = Rc::new(RefCell::new(true));
         let current_size = Rc::new(RefCell::new(size_val));
         let current_device = Rc::new(RefCell::new(device_path.to_string()));
+
+        // --- GStreamer bus monitoring for camera errors/disconnect ---
+        if let Some(ref cam) = *camera.borrow() {
+            if let Some(bus) = cam.bus() {
+                let overlay_for_bus = Rc::clone(&overlay);
+                let camera_for_bus = Rc::clone(&camera);
+                let device_for_bus = Rc::clone(&current_device);
+                let size_for_bus = Rc::clone(&current_size);
+
+                glib::timeout_add_local(Duration::from_millis(100), move || {
+                    while let Some(msg) = bus.pop() {
+                        use gstreamer::MessageView;
+                        match msg.view() {
+                            MessageView::Error(err) => {
+                                eprintln!("portrait: camera error: {}", err.error());
+                                // Stop pipeline and show placeholder
+                                if let Some(ref cam) = *camera_for_bus.borrow() {
+                                    cam.stop();
+                                }
+                                overlay_for_bus.borrow().show_placeholder();
+                                // Schedule reconnect attempt
+                                schedule_reconnect(
+                                    Rc::clone(&camera_for_bus),
+                                    Rc::clone(&overlay_for_bus),
+                                    Rc::clone(&device_for_bus),
+                                    Rc::clone(&size_for_bus),
+                                );
+                                return glib::ControlFlow::Break;
+                            }
+                            MessageView::Eos(_) => {
+                                eprintln!("portrait: camera stream ended");
+                                overlay_for_bus.borrow().show_placeholder();
+                            }
+                            _ => {}
+                        }
+                    }
+                    glib::ControlFlow::Continue
+                });
+            }
+        }
 
         // IPC channel: the server thread sends (Command, ResponseSender) pairs.
         // We poll from the GLib main loop via timeout_add_local.
@@ -245,4 +286,72 @@ fn cleanup_and_exit(code: i32) -> ! {
     ipc::cleanup_pid();
     ipc::cleanup_socket();
     std::process::exit(code);
+}
+
+/// Show placeholder and schedule a reconnect attempt after a delay.
+///
+/// On success, replaces the camera in the shared state and sets up
+/// frame callbacks + bus monitoring. On failure, retries after 3 more seconds.
+fn schedule_reconnect(
+    camera: Rc<RefCell<Option<CameraPipeline>>>,
+    overlay: Rc<RefCell<OverlayWindow>>,
+    device: Rc<RefCell<String>>,
+    size: Rc<RefCell<u32>>,
+) {
+    glib::timeout_add_local_once(Duration::from_secs(3), move || {
+        let device_path = device.borrow().clone();
+        let size_px = *size.borrow();
+        match CameraPipeline::new(&device_path, size_px) {
+            Ok(cam) => {
+                cam.setup_frame_callback(overlay.borrow().picture());
+                if let Err(e) = cam.start() {
+                    eprintln!("portrait: reconnect start failed: {}", e);
+                    overlay.borrow().show_placeholder();
+                    schedule_reconnect(camera, overlay, device, size);
+                } else {
+                    eprintln!("portrait: camera reconnected");
+                    // Set up bus monitoring for the new pipeline
+                    if let Some(bus) = cam.bus() {
+                        let overlay_for_bus = Rc::clone(&overlay);
+                        let camera_for_bus = Rc::clone(&camera);
+                        let device_for_bus = Rc::clone(&device);
+                        let size_for_bus = Rc::clone(&size);
+
+                        glib::timeout_add_local(Duration::from_millis(100), move || {
+                            while let Some(msg) = bus.pop() {
+                                use gstreamer::MessageView;
+                                match msg.view() {
+                                    MessageView::Error(err) => {
+                                        eprintln!("portrait: camera error: {}", err.error());
+                                        if let Some(ref cam) = *camera_for_bus.borrow() {
+                                            cam.stop();
+                                        }
+                                        overlay_for_bus.borrow().show_placeholder();
+                                        schedule_reconnect(
+                                            Rc::clone(&camera_for_bus),
+                                            Rc::clone(&overlay_for_bus),
+                                            Rc::clone(&device_for_bus),
+                                            Rc::clone(&size_for_bus),
+                                        );
+                                        return glib::ControlFlow::Break;
+                                    }
+                                    MessageView::Eos(_) => {
+                                        eprintln!("portrait: camera stream ended");
+                                        overlay_for_bus.borrow().show_placeholder();
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            glib::ControlFlow::Continue
+                        });
+                    }
+                    *camera.borrow_mut() = Some(cam);
+                }
+            }
+            Err(e) => {
+                eprintln!("portrait: reconnect failed: {}", e);
+                schedule_reconnect(camera, overlay, device, size);
+            }
+        }
+    });
 }

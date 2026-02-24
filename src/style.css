@@ -2,7 +2,7 @@
 .portrait-circle {
     border-radius: 50%;
     overflow: hidden;
-    background: transparent;
+    background-color: #333333; /* dark grey placeholder when no camera */
     min-width: 200px;
     min-height: 200px;
 }
