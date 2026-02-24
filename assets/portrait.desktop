@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Portrait
+Comment=Webcam circle overlay for screen recording
+Exec=portrait start
+Icon=portrait
+Terminal=false
+Categories=Video;Utility;
+StartupNotify=false

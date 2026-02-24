@@ -69,6 +69,10 @@ fn main() {
         Commands::Select => {
             send_or_exit(ipc::Command::Select);
         }
+
+        Commands::Install => {
+            install_local();
+        }
     }
 }
 
@@ -109,4 +113,69 @@ fn parse_size_value(s: &str) -> ipc::SizeValue {
             ipc::SizeValue::Custom(px)
         }
     }
+}
+
+fn install_local() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| {
+        eprintln!("portrait: $HOME not set");
+        std::process::exit(1);
+    });
+
+    // 1. Copy binary
+    let bin_dir = PathBuf::from(&home).join(".local/bin");
+    fs::create_dir_all(&bin_dir).unwrap_or_else(|e| {
+        eprintln!("portrait: failed to create {}: {}", bin_dir.display(), e);
+        std::process::exit(1);
+    });
+    let bin_dst = bin_dir.join("portrait");
+    let bin_src = std::env::current_exe().unwrap_or_else(|e| {
+        eprintln!("portrait: cannot find current binary: {}", e);
+        std::process::exit(1);
+    });
+    fs::copy(&bin_src, &bin_dst).unwrap_or_else(|e| {
+        eprintln!("portrait: failed to copy binary: {}", e);
+        std::process::exit(1);
+    });
+    // Make executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&bin_dst).unwrap().permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&bin_dst, perms).unwrap_or(());
+    }
+    println!("installed binary  → {}", bin_dst.display());
+
+    // 2. Write icon
+    let icon_dir = PathBuf::from(&home).join(".local/share/icons/hicolor/512x512/apps");
+    fs::create_dir_all(&icon_dir).unwrap_or_else(|e| {
+        eprintln!("portrait: failed to create {}: {}", icon_dir.display(), e);
+        std::process::exit(1);
+    });
+    let icon_dst = icon_dir.join("portrait.png");
+    const ICON_BYTES: &[u8] = include_bytes!("../assets/tray_icon.png");
+    fs::write(&icon_dst, ICON_BYTES).unwrap_or_else(|e| {
+        eprintln!("portrait: failed to write icon: {}", e);
+        std::process::exit(1);
+    });
+    println!("installed icon    → {}", icon_dst.display());
+
+    // 3. Write .desktop file
+    let apps_dir = PathBuf::from(&home).join(".local/share/applications");
+    fs::create_dir_all(&apps_dir).unwrap_or_else(|e| {
+        eprintln!("portrait: failed to create {}: {}", apps_dir.display(), e);
+        std::process::exit(1);
+    });
+    let desktop_dst = apps_dir.join("portrait.desktop");
+    const DESKTOP: &str = include_str!("../assets/portrait.desktop");
+    fs::write(&desktop_dst, DESKTOP).unwrap_or_else(|e| {
+        eprintln!("portrait: failed to write .desktop file: {}", e);
+        std::process::exit(1);
+    });
+    println!("installed desktop → {}", desktop_dst.display());
+
+    println!("done. you may need to log out and back in for the launcher to pick it up.");
 }

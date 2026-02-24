@@ -44,6 +44,9 @@ pub enum Commands {
 
     /// Open the webcam selection dialog
     Select,
+
+    /// Install portrait to ~/.local (binary, icon, desktop entry)
+    Install,
 }
 
 impl Commands {
