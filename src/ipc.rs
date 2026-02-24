@@ -280,3 +280,20 @@ pub fn load_last_device() -> Option<String> {
     let path = config_dir().join("device");
     std::fs::read_to_string(path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
+
+/// Persist overlay position to `$XDG_CONFIG_HOME/portrait/position`.
+pub fn save_position(right: i32, top: i32) {
+    let dir = config_dir();
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let _ = std::fs::write(dir.join("position"), format!("{},{}", right, top));
+    }
+}
+
+/// Load persisted overlay position. Returns `None` if not set or unreadable.
+pub fn load_position() -> Option<(i32, i32)> {
+    let content = std::fs::read_to_string(config_dir().join("position")).ok()?;
+    let mut parts = content.trim().splitn(2, ',');
+    let right = parts.next()?.trim().parse::<i32>().ok()?;
+    let top   = parts.next()?.trim().parse::<i32>().ok()?;
+    Some((right, top))
+}

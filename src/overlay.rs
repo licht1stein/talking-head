@@ -4,6 +4,7 @@ use std::rc::Rc;
 use gdk4::prelude::*;
 use gtk4::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use crate::ipc;
 
 const DEFAULT_SIZE: u32 = 200;
 
@@ -35,6 +36,9 @@ impl OverlayWindow {
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
+        // Load persisted position or use defaults
+        let (init_right, init_top) = ipc::load_position().unwrap_or((20, 50));
+
         // Create window
         let window = gtk4::Window::builder()
             .application(app)
@@ -54,8 +58,8 @@ impl OverlayWindow {
         // Anchor Top+Right so we position from the upper-right corner
         window.set_anchor(Edge::Top, true);
         window.set_anchor(Edge::Right, true);
-        window.set_margin(Edge::Top, 20);
-        window.set_margin(Edge::Right, 20);
+        window.set_margin(Edge::Top, init_top);
+        window.set_margin(Edge::Right, init_right);
 
         // Add CSS class for transparent background
         window.add_css_class("portrait-overlay");
@@ -113,7 +117,7 @@ impl OverlayWindow {
         });
 
         // Shared mutable position state for drag gesture closures
-        let position = Rc::new(RefCell::new((20i32, 20i32)));  // (right_margin, top_margin)
+        let position = Rc::new(RefCell::new((init_right, init_top)));  // (right_margin, top_margin)
         let drag_start = Rc::new(RefCell::new((0i32, 0i32)));
 
         // Set up drag-to-reposition gesture on the drawing area
@@ -149,6 +153,7 @@ impl OverlayWindow {
             *pos_for_end.borrow_mut() = (new_right, new_y);
             win_for_end.set_margin(Edge::Right, new_right);
             win_for_end.set_margin(Edge::Top, new_y);
+            ipc::save_position(new_right, new_y);
         });
 
         drawing_area.add_controller(gesture);
