@@ -15,6 +15,7 @@ pub struct OverlayWindow {
     size: u32,
     visible: bool,
     position: Rc<RefCell<(i32, i32)>>,
+    #[allow(dead_code)]
     drag_start: Rc<RefCell<(i32, i32)>>,
 }
 
@@ -88,8 +89,8 @@ impl OverlayWindow {
         let win_for_update = window.clone();
         gesture.connect_drag_update(move |_, offset_x, offset_y| {
             let (start_x, start_y) = *ds_for_update.borrow();
-            let new_x = (start_x + offset_x as i32).max(0).min(3840);
-            let new_y = (start_y + offset_y as i32).max(0).min(2160);
+            let new_x = (start_x + offset_x as i32).clamp(0, 3840);
+            let new_y = (start_y + offset_y as i32).clamp(0, 2160);
             *pos_for_update.borrow_mut() = (new_x, new_y);
             win_for_update.set_margin(Edge::Left, new_x);
             win_for_update.set_margin(Edge::Top, new_y);
@@ -100,8 +101,8 @@ impl OverlayWindow {
         let win_for_end = window.clone();
         gesture.connect_drag_end(move |_, offset_x, offset_y| {
             let (start_x, start_y) = *ds_for_end.borrow();
-            let new_x = (start_x + offset_x as i32).max(0).min(3840);
-            let new_y = (start_y + offset_y as i32).max(0).min(2160);
+            let new_x = (start_x + offset_x as i32).clamp(0, 3840);
+            let new_y = (start_y + offset_y as i32).clamp(0, 2160);
             *pos_for_end.borrow_mut() = (new_x, new_y);
             win_for_end.set_margin(Edge::Left, new_x);
             win_for_end.set_margin(Edge::Top, new_y);
@@ -144,10 +145,12 @@ impl OverlayWindow {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_paintable(&self, paintable: gdk4::Paintable) {
         self.picture.set_paintable(Some(&paintable));
     }
 
+    #[allow(dead_code)]
     pub fn window(&self) -> &gtk4::Window {
         &self.window
     }

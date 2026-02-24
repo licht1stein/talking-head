@@ -35,6 +35,7 @@ impl CameraPipeline {
     ///
     /// With the appsink approach, frames are pushed to a `gtk4::Picture` via
     /// `setup_frame_callback()` instead. This returns `None`.
+    #[allow(dead_code)]
     pub fn paintable(&self) -> Option<gdk4::Paintable> {
         None
     }
@@ -104,6 +105,7 @@ impl CameraPipeline {
     }
 
     /// Borrow the underlying GStreamer pipeline.
+    #[allow(dead_code)]
     pub fn pipeline(&self) -> &gst::Pipeline {
         &self.pipeline
     }

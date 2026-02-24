@@ -63,6 +63,7 @@ pub struct TrayIcon;
 
 impl TrayIcon {
     /// Create a new `TrayIcon` with the given command sender.
+    #[allow(dead_code)]
     pub fn new(_tx: mpsc::Sender<ipc::Command>) -> Self {
         TrayIcon
     }
