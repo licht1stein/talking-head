@@ -10,6 +10,7 @@ use crate::overlay::FrameStore;
 pub struct CameraDevice {
     pub name: String,
     pub path: String,
+    pub max_resolution: Option<(u32, u32)>,
 }
 
 pub struct CameraPipeline {
@@ -125,7 +126,26 @@ impl CameraPipeline {
                     .and_then(|props| props.get::<String>("device.path").ok())
                     .unwrap_or_else(|| "/dev/video0".to_string());
 
-                CameraDevice { name, path }
+                let max_resolution = device.caps().and_then(|caps| {
+                    let mut best: Option<(i64, u32, u32)> = None;
+                    for s in caps.iter() {
+                        let name = s.name().as_str();
+                        if name != "video/x-raw" && name != "image/jpeg" { continue; }
+                        let w = s.get::<i32>("width")
+                            .or_else(|_| s.get::<gst::IntRange<i32>>("width").map(|r| r.max()))
+                            .ok()?;
+                        let h = s.get::<i32>("height")
+                            .or_else(|_| s.get::<gst::IntRange<i32>>("height").map(|r| r.max()))
+                            .ok()?;
+                        let area = w as i64 * h as i64;
+                        if best.map_or(true, |b| area > b.0) {
+                            best = Some((area, w as u32, h as u32));
+                        }
+                    }
+                    best.map(|(_, w, h)| (w, h))
+                });
+
+                CameraDevice { name, path, max_resolution }
             })
             .collect();
 

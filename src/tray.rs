@@ -90,7 +90,10 @@ impl ksni::Tray for PortraitTray {
                     .map(|dev| {
                         let path = dev.path.clone();
                         StandardItem {
-                            label: dev.name.clone(),
+                            label: match dev.max_resolution {
+                                Some((w, h)) => format!("{} ({}×{})", dev.name, w, h),
+                                None => dev.name.clone(),
+                            },
                             activate: Box::new(move |tray: &mut Self| {
                                 let _ = tray.tx.send(ipc::Command::SelectDevice(path.clone()));
                             }),
