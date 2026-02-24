@@ -100,6 +100,9 @@ impl OverlayWindow {
     pub fn window(&self) -> &gtk4::Window {
         &self.window
     }
+    pub fn picture(&self) -> &gtk4::Picture {
+        &self.picture
+    }
 }
 
 /// Set a circular input region on the window's surface.

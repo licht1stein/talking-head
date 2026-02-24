@@ -61,10 +61,8 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
                 if let Err(e) = cam.start() {
                     eprintln!("portrait: failed to start camera: {}", e);
                 }
-                // Connect paintable if available
-                if let Some(paintable) = cam.paintable() {
-                    overlay.set_paintable(paintable);
-                }
+                // Connect appsink frames to the overlay picture
+                cam.setup_frame_callback(overlay.picture());
                 Some(cam)
             }
             Err(e) => {

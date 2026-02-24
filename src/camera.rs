@@ -1,5 +1,7 @@
 use gstreamer as gst;
 use gstreamer::prelude::*;
+use gstreamer_app::AppSink;
+use std::time::Duration;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CameraDevice {
@@ -9,7 +11,7 @@ pub struct CameraDevice {
 
 pub struct CameraPipeline {
     pipeline: gst::Pipeline,
-    sink: gst::Element,
+    appsink: AppSink,
     device_path: String,
     size: u32,
 }
@@ -19,26 +21,53 @@ impl CameraPipeline {
     pub fn new(device_path: &str, size: u32) -> Result<Self, String> {
         gst::init().map_err(|e| format!("Failed to init GStreamer: {e}"))?;
 
-        let (pipeline, sink) = Self::build_pipeline(device_path, size)?;
+        let (pipeline, appsink) = Self::build_pipeline(device_path, size)?;
 
         Ok(Self {
             pipeline,
-            sink,
+            appsink,
             device_path: device_path.to_string(),
             size,
         })
     }
 
-    /// Return the paintable from the sink element, if available.
+    /// Return a paintable from the sink element, if available.
     ///
-    /// Returns `None` when the sink does not expose a "paintable" property
-    /// (e.g. when using autovideosink as a fallback).
-    /// Task 6 will integrate the real gtk4paintablesink.
+    /// With the appsink approach, frames are pushed to a `gtk4::Picture` via
+    /// `setup_frame_callback()` instead. This returns `None`.
     pub fn paintable(&self) -> Option<gdk4::Paintable> {
-        // The sink must expose a "paintable" property (gtk4paintablesink).
-        // With autovideosink fallback this returns None.
-        // Task 6 will integrate the real gtk4paintablesink with matching glib versions.
         None
+    }
+
+    /// Set up a polling loop that pulls frames from the appsink and updates
+    /// the given `gtk4::Picture` with a `gdk4::MemoryTexture` each frame.
+    ///
+    /// The closure runs on the GTK main thread via `glib::timeout_add_local`
+    /// at ~30fps (~33ms interval).
+    pub fn setup_frame_callback(&self, picture: &gtk4::Picture) {
+        let appsink = self.appsink.clone();
+        let size = self.size;
+        let picture = picture.clone();
+
+        glib::timeout_add_local(Duration::from_millis(33), move || {
+            // Non-blocking pull: ClockTime::ZERO means don't wait
+            if let Some(sample) = appsink.try_pull_sample(gst::ClockTime::ZERO) {
+                if let Some(buffer) = sample.buffer() {
+                    if let Ok(map) = buffer.map_readable() {
+                        let bytes = glib::Bytes::from(map.as_slice());
+                        let texture = gdk4::MemoryTexture::new(
+                            size as i32,
+                            size as i32,
+                            gdk4::MemoryFormat::R8g8b8a8,
+                            &bytes,
+                            (size * 4) as usize, // stride = width * 4 bytes (RGBA)
+                        );
+                        picture.set_paintable(Some(&texture));
+                    }
+                }
+            }
+            glib::ControlFlow::Continue
+        });
     }
 
     /// Set the pipeline to Playing state.
@@ -62,9 +91,9 @@ impl CameraPipeline {
     /// Switch to a different device (stops, rebuilds, and restarts the pipeline).
     pub fn set_device(&mut self, device_path: &str) -> Result<(), String> {
         self.stop();
-        let (pipeline, sink) = Self::build_pipeline(device_path, self.size)?;
+        let (pipeline, appsink) = Self::build_pipeline(device_path, self.size)?;
         self.pipeline = pipeline;
-        self.sink = sink;
+        self.appsink = appsink;
         self.device_path = device_path.to_string();
         self.start()
     }
@@ -113,13 +142,11 @@ impl CameraPipeline {
 
     // ── internal ──────────────────────────────────────────────
 
-    fn build_pipeline(
-        device_path: &str,
-        size: u32,
-    ) -> Result<(gst::Pipeline, gst::Element), String> {
+    fn build_pipeline(device_path: &str, size: u32) -> Result<(gst::Pipeline, AppSink), String> {
         let pipeline_desc = format!(
             "v4l2src device={device_path} ! videoconvert ! videoscale ! \
-             video/x-raw,width={size},height={size} ! autovideosink name=sink"
+             video/x-raw,format=RGBA,width={size},height={size} ! \
+             appsink name=sink max-buffers=1 drop=true sync=false"
         );
 
         let element = gst::parse::launch(&pipeline_desc)
@@ -129,11 +156,15 @@ impl CameraPipeline {
             .downcast::<gst::Pipeline>()
             .map_err(|_| "parse_launch did not return a Pipeline".to_string())?;
 
-        let sink = pipeline
+        let sink_element = pipeline
             .by_name("sink")
             .ok_or_else(|| "Could not find sink element in pipeline".to_string())?;
 
-        Ok((pipeline, sink))
+        let appsink = sink_element
+            .downcast::<AppSink>()
+            .map_err(|_| "sink element is not an AppSink".to_string())?;
+
+        Ok((pipeline, appsink))
     }
 }
 
