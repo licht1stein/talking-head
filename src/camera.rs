@@ -135,9 +135,80 @@ impl CameraPipeline {
 
     // ── internal ──────────────────────────────────────────────
 
+    /// Query the maximum supported resolution from the camera device.
+    /// Returns `(width, height, gst_format_name)` where format is
+    /// `"video/x-raw"` or `"image/jpeg"`, or `None` if query fails.
+    fn query_max_resolution(device_path: &str) -> Option<(u32, u32, String)> {
+        let monitor = gst::DeviceMonitor::new();
+        monitor.add_filter(Some("Video/Source"), None);
+        if monitor.start().is_err() {
+            return None;
+        }
+
+        let result = monitor.devices().iter().find_map(|device| {
+            let path = device
+                .properties()
+                .and_then(|props| props.get::<String>("device.path").ok())?;
+            if path != device_path {
+                return None;
+            }
+
+            let caps = device.caps()?;
+            let mut best: Option<(i64, i32, i32, String)> = None;
+
+            for s in caps.iter() {
+                let format_name = s.name().as_str();
+                if format_name != "video/x-raw" && format_name != "image/jpeg" {
+                    continue;
+                }
+
+                let w = s.get::<i32>("width")
+                    .or_else(|_| {
+                        s.get::<gst::IntRange<i32>>("width").map(|r| r.max())
+                    })
+                    .ok()?;
+
+                let h = s.get::<i32>("height")
+                    .or_else(|_| {
+                        s.get::<gst::IntRange<i32>>("height").map(|r| r.max())
+                    })
+                    .ok()?;
+
+                let area = w as i64 * h as i64;
+                if best.as_ref().map_or(true, |b| area > b.0) {
+                    best = Some((area, w, h, format_name.to_string()));
+                }
+            }
+
+            best.map(|(_, w, h, fmt)| (w as u32, h as u32, fmt))
+        });
+
+        monitor.stop();
+        result
+    }
+
+
     fn build_pipeline(device_path: &str, size: u32) -> Result<(gst::Pipeline, AppSink), String> {
+        let src_and_decode = match Self::query_max_resolution(device_path) {
+            Some((max_w, max_h, ref fmt)) if fmt == "image/jpeg" => {
+                format!(
+                    "v4l2src device={device_path} ! \
+                     image/jpeg,width={max_w},height={max_h} ! jpegdec ! videoconvert"
+                )
+            }
+            Some((max_w, max_h, _)) => {
+                format!(
+                    "v4l2src device={device_path} ! \
+                     video/x-raw,width={max_w},height={max_h} ! videoconvert"
+                )
+            }
+            None => {
+                format!("v4l2src device={device_path} ! videoconvert")
+            }
+        };
+
         let pipeline_desc = format!(
-            "v4l2src device={device_path} ! videoconvert ! \
+            "{src_and_decode} ! \
              aspectratiocrop aspect-ratio=1/1 ! \
              videoflip method=horizontal-flip ! \
              videoscale ! video/x-raw,format=BGRA,width={size},height={size} ! \
