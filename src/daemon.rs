@@ -90,14 +90,20 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
         if let Err(e) = ipc::start_server(ipc_tx) {
             eprintln!("portrait: failed to start IPC server: {}", e);
         }
-
         // Wrap receiver in Rc<RefCell> so the closure can own it
         let ipc_rx = Rc::new(RefCell::new(ipc_rx));
 
-        // Poll the IPC channel every 50ms from the GTK main thread
+        // --- Tray icon ---
+        // Separate channel for tray→daemon commands (no response needed).
+        let (tray_tx, tray_rx) = mpsc::channel::<Command>();
+        crate::tray::TrayIcon::spawn(tray_tx);
+
+        let tray_rx = Rc::new(RefCell::new(tray_rx));
+
+        // Poll both IPC and tray channels every 50ms from the GTK main thread
         let app_dispatch = app.clone();
         glib::timeout_add_local(Duration::from_millis(50), move || {
-            // Drain all pending commands
+            // Drain pending IPC commands
             loop {
                 match ipc_rx.borrow().try_recv() {
                     Ok((cmd, resp_tx)) => {
@@ -116,6 +122,24 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
                     Err(mpsc::TryRecvError::Disconnected) => {
                         return glib::ControlFlow::Break;
                     }
+                }
+            }
+            // Drain pending tray commands (fire-and-forget, no response)
+            loop {
+                match tray_rx.borrow().try_recv() {
+                    Ok(cmd) => {
+                        dispatch_command(
+                            &cmd,
+                            &app_dispatch,
+                            &overlay,
+                            &camera,
+                            &visible,
+                            &current_size,
+                            &current_device,
+                        );
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => break,
                 }
             }
             glib::ControlFlow::Continue
@@ -170,12 +194,13 @@ fn dispatch_command(
             let vis = *visible.borrow();
             let sz = *size.borrow();
             let dev = device.borrow().clone();
+            let (pos_x, pos_y) = overlay.borrow().get_position();
             let data = serde_json::json!({
                 "running": true,
                 "visible": vis,
                 "device": dev,
                 "size": sz,
-                "position": {"x": 0, "y": 0}
+                "position": {"x": pos_x, "y": pos_y}
             });
             Response::OkData(data)
         }
@@ -199,7 +224,20 @@ fn dispatch_command(
             Response::OkData(json)
         }
 
-        Command::Select => Response::Error("not implemented".to_string()),
+        Command::Select => {
+            let device_rc = Rc::clone(device);
+            let camera_rc = Rc::clone(camera);
+            let app_clone = app.clone();
+            glib::idle_add_local_once(move || {
+                crate::dialog::show_device_picker(&app_clone, move |path| {
+                    if let Some(ref mut cam) = *camera_rc.borrow_mut() {
+                        let _ = cam.set_device(&path);
+                    }
+                    *device_rc.borrow_mut() = path;
+                });
+            });
+            Response::Ok
+        }
     }
 }
 
