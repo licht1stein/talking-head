@@ -25,12 +25,7 @@ fn main() {
                 std::process::exit(1);
             });
 
-            // TODO: Task 7 will implement actual daemon startup
-            if foreground {
-                eprintln!("portrait: daemon not yet implemented (Task 7)");
-            } else {
-                eprintln!("portrait: daemon not yet implemented (Task 7)");
-            }
+            daemon::run(device, size_px, foreground);
         }
 
         Commands::Stop => {
