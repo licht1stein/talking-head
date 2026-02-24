@@ -137,8 +137,10 @@ impl CameraPipeline {
 
     fn build_pipeline(device_path: &str, size: u32) -> Result<(gst::Pipeline, AppSink), String> {
         let pipeline_desc = format!(
-            "v4l2src device={device_path} ! videoconvert ! videoscale ! \
-             video/x-raw,format=BGRA,width={size},height={size} ! \
+            "v4l2src device={device_path} ! videoconvert ! \
+             aspectratiocrop aspect-ratio=1/1 ! \
+             videoflip method=horizontal-flip ! \
+             videoscale ! video/x-raw,format=BGRA,width={size},height={size} ! \
              appsink name=sink max-buffers=1 drop=true sync=false"
         );
 
