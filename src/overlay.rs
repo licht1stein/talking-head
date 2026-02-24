@@ -1,6 +1,9 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use gdk4::prelude::*;
 use gtk4::prelude::*;
-use gtk4_layer_shell::{KeyboardMode, Layer, LayerShell};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 const DEFAULT_SIZE: u32 = 200;
 
@@ -11,6 +14,8 @@ pub struct OverlayWindow {
     picture: gtk4::Picture,
     size: u32,
     visible: bool,
+    position: Rc<RefCell<(i32, i32)>>,
+    drag_start: Rc<RefCell<(i32, i32)>>,
 }
 
 impl OverlayWindow {
@@ -64,11 +69,53 @@ impl OverlayWindow {
             set_circular_input_region(w, size);
         });
 
+        // Shared mutable position state for drag gesture closures
+        let position = Rc::new(RefCell::new((0i32, 0i32)));
+        let drag_start = Rc::new(RefCell::new((0i32, 0i32)));
+
+        // Set up drag-to-reposition gesture on the container
+        let gesture = gtk4::GestureDrag::new();
+
+        let pos_for_begin = position.clone();
+        let ds_for_begin = drag_start.clone();
+        gesture.connect_drag_begin(move |_, _x, _y| {
+            let current = *pos_for_begin.borrow();
+            *ds_for_begin.borrow_mut() = current;
+        });
+
+        let pos_for_update = position.clone();
+        let ds_for_update = drag_start.clone();
+        let win_for_update = window.clone();
+        gesture.connect_drag_update(move |_, offset_x, offset_y| {
+            let (start_x, start_y) = *ds_for_update.borrow();
+            let new_x = (start_x + offset_x as i32).max(0).min(3840);
+            let new_y = (start_y + offset_y as i32).max(0).min(2160);
+            *pos_for_update.borrow_mut() = (new_x, new_y);
+            win_for_update.set_margin(Edge::Left, new_x);
+            win_for_update.set_margin(Edge::Top, new_y);
+        });
+
+        let pos_for_end = position.clone();
+        let ds_for_end = drag_start.clone();
+        let win_for_end = window.clone();
+        gesture.connect_drag_end(move |_, offset_x, offset_y| {
+            let (start_x, start_y) = *ds_for_end.borrow();
+            let new_x = (start_x + offset_x as i32).max(0).min(3840);
+            let new_y = (start_y + offset_y as i32).max(0).min(2160);
+            *pos_for_end.borrow_mut() = (new_x, new_y);
+            win_for_end.set_margin(Edge::Left, new_x);
+            win_for_end.set_margin(Edge::Top, new_y);
+        });
+
+        container.add_controller(gesture);
+
         OverlayWindow {
             window,
             picture,
             size: DEFAULT_SIZE,
             visible: false,
+            position,
+            drag_start,
         }
     }
 
@@ -76,6 +123,10 @@ impl OverlayWindow {
         self.visible = visible;
         if visible {
             self.window.present();
+            // Restore position margins after present
+            let (x, y) = *self.position.borrow();
+            self.window.set_margin(Edge::Left, x);
+            self.window.set_margin(Edge::Top, y);
         } else {
             self.window.set_visible(false);
         }
@@ -102,6 +153,10 @@ impl OverlayWindow {
     }
     pub fn picture(&self) -> &gtk4::Picture {
         &self.picture
+    }
+
+    pub fn get_position(&self) -> (i32, i32) {
+        *self.position.borrow()
     }
 }
 
