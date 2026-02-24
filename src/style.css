@@ -3,6 +3,8 @@
     border-radius: 50%;
     overflow: hidden;
     background: transparent;
+    min-width: 200px;
+    min-height: 200px;
 }
 
 window.portrait-overlay {
