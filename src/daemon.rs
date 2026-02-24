@@ -286,6 +286,25 @@ fn dispatch_command(
             });
             Response::Ok
         }
+
+        Command::SelectDevice(path) => {
+            let path = path.clone();
+            let device_rc = Rc::clone(device);
+            let camera_rc = Rc::clone(camera);
+            let overlay_rc = Rc::clone(overlay);
+            glib::idle_add_local_once(move || {
+                if let Some(ref mut cam) = *camera_rc.borrow_mut() {
+                    if cam.set_device(&path).is_ok() {
+                        cam.setup_frame_callback(
+                            overlay_rc.borrow().frame_store(),
+                            overlay_rc.borrow().drawing_area().clone(),
+                        );
+                    }
+                }
+                *device_rc.borrow_mut() = path;
+            });
+            Response::Ok
+        }
     }
 }
 

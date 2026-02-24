@@ -17,6 +17,7 @@ pub enum Command {
     Status,
     Size(SizeValue),
     Select,
+    SelectDevice(String),
     Devices,
 }
 

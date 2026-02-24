@@ -2,6 +2,7 @@ use std::io::Cursor;
 use std::sync::mpsc;
 
 use crate::ipc;
+use crate::camera::CameraPipeline;
 
 /// Embedded PNG bytes for the tray icon
 const TRAY_ICON_PNG: &[u8] = include_bytes!("../assets/tray_icon.png");
@@ -82,11 +83,22 @@ impl ksni::Tray for PortraitTray {
             }
             .into(),
             MenuItem::Separator,
-            StandardItem {
-                label: "Select Webcam...".into(),
-                activate: Box::new(|tray: &mut Self| {
-                    let _ = tray.tx.send(ipc::Command::Select);
-                }),
+            SubMenu {
+                label: "Camera".into(),
+                submenu: CameraPipeline::list_devices()
+                    .into_iter()
+                    .map(|dev| {
+                        let path = dev.path.clone();
+                        StandardItem {
+                            label: dev.name.clone(),
+                            activate: Box::new(move |tray: &mut Self| {
+                                let _ = tray.tx.send(ipc::Command::SelectDevice(path.clone()));
+                            }),
+                            ..Default::default()
+                        }
+                        .into()
+                    })
+                    .collect(),
                 ..Default::default()
             }
             .into(),
