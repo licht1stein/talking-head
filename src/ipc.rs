@@ -252,3 +252,31 @@ fn handle_connection(stream: &UnixStream, tx: &CommandSender) -> Result<(), Stri
 
     Ok(())
 }
+
+
+// ---------------------------------------------------------------------------
+// Last-used device persistence
+// ---------------------------------------------------------------------------
+
+fn config_dir() -> PathBuf {
+    let base = std::env::var("XDG_CONFIG_HOME")
+        .unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            format!("{}/.config", home)
+        });
+    PathBuf::from(base).join("portrait")
+}
+
+/// Persist the last-used device path to `$XDG_CONFIG_HOME/portrait/device`.
+pub fn save_last_device(path: &str) {
+    let dir = config_dir();
+    if std::fs::create_dir_all(&dir).is_ok() {
+        let _ = std::fs::write(dir.join("device"), path);
+    }
+}
+
+/// Read the last-used device path, if any.
+pub fn load_last_device() -> Option<String> {
+    let path = config_dir().join("device");
+    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}

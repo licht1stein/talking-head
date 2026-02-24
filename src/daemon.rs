@@ -49,7 +49,12 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
     let size_val = size;
 
     app.connect_activate(move |app| {
-        let device_path = device_clone.as_deref().unwrap_or("/dev/video0");
+        let device_path_owned = device_clone
+            .as_ref()
+            .cloned()
+            .or_else(|| ipc::load_last_device())
+            .unwrap_or_else(|| "/dev/video0".to_string());
+        let device_path = device_path_owned.as_str();
 
         // Create overlay window
         let mut overlay = OverlayWindow::new(app);
@@ -289,6 +294,7 @@ fn dispatch_command(
 
         Command::SelectDevice(path) => {
             let path = path.clone();
+            ipc::save_last_device(&path);
             let device_rc = Rc::clone(device);
             let camera_rc = Rc::clone(camera);
             let overlay_rc = Rc::clone(overlay);
