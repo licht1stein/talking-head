@@ -153,6 +153,7 @@ impl CameraPipeline {
                     let h = s.get::<i32>("height")
                         .or_else(|_| s.get::<gst::IntRange<i32>>("height").map(|r| r.max()))
                         .ok()?;
+                    if w > 1280 || h > 720 { continue; }
                     let area = w as i64 * h as i64;
                     if best.map_or(true, |b| area > b.0) {
                         best = Some((area, w as u32, h as u32));
@@ -227,6 +228,7 @@ impl CameraPipeline {
                     })
                     .ok()?;
 
+                if w > 1280 || h > 720 { continue; }
                 let area = w as i64 * h as i64;
                 if best.as_ref().map_or(true, |b| area > b.0) {
                     best = Some((area, w, h, format_name.to_string()));
