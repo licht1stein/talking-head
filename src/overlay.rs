@@ -49,7 +49,7 @@ impl OverlayWindow {
 
         // Configure layer shell (must be before realize/map)
         window.init_layer_shell();
-        window.set_layer(Layer::Overlay);
+        window.set_layer(Layer::Top);
         window.set_exclusive_zone(-1);
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_namespace(Some("portrait"));
