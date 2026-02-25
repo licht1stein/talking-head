@@ -2,6 +2,9 @@
 name = "talking-head"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
+description = "Loom-style webcam bubble overlay for Wayland Linux"
+repository = "https://github.com/licht1stein/talking-head"
 
 [dependencies]
 gtk4 = { version = "0.10", features = ["v4_12"] }
