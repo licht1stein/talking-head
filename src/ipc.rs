@@ -48,12 +48,12 @@ pub type CommandSender = mpsc::Sender<(Command, mpsc::Sender<Response>)>;
 
 pub fn socket_path() -> PathBuf {
     let dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(dir).join("portrait.sock")
+    PathBuf::from(dir).join("talking-head.sock")
 }
 
 pub fn pid_path() -> PathBuf {
     let dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(dir).join("portrait.pid")
+    PathBuf::from(dir).join("talking-head.pid")
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ pub fn write_pid() {
     let pid = std::process::id();
     std::fs::write(&path, pid.to_string()).unwrap_or_else(|e| {
         eprintln!(
-            "portrait: failed to write PID file {}: {}",
+            "talking-head: failed to write PID file {}: {}",
             path.display(),
             e
         );
@@ -80,7 +80,7 @@ pub fn read_pid() -> Option<u32> {
     content.trim().parse::<u32>().ok()
 }
 
-/// Check whether a portrait daemon is already running by reading the PID file
+/// Check whether a talking-head daemon is already running by reading the PID file
 /// and verifying the process is alive (signal 0 via `kill`).
 pub fn is_already_running() -> bool {
     let pid = match read_pid() {
@@ -190,11 +190,11 @@ pub fn start_server(tx: CommandSender) -> Result<(), String> {
                 match conn {
                     Ok(stream) => {
                         if let Err(e) = handle_connection(&stream, &tx) {
-                            eprintln!("portrait: ipc connection error: {}", e);
+                            eprintln!("talking-head: ipc connection error: {}", e);
                         }
                     }
                     Err(e) => {
-                        eprintln!("portrait: ipc accept error: {}", e);
+                        eprintln!("talking-head: ipc accept error: {}", e);
                     }
                 }
             }
@@ -264,10 +264,10 @@ fn config_dir() -> PathBuf {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
             format!("{}/.config", home)
         });
-    PathBuf::from(base).join("portrait")
+    PathBuf::from(base).join("talking-head")
 }
 
-/// Persist the last-used device path to `$XDG_CONFIG_HOME/portrait/device`.
+/// Persist the last-used device path to `$XDG_CONFIG_HOME/talking-head/device`.
 pub fn save_last_device(path: &str) {
     let dir = config_dir();
     if std::fs::create_dir_all(&dir).is_ok() {
@@ -281,7 +281,7 @@ pub fn load_last_device() -> Option<String> {
     std::fs::read_to_string(path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-/// Persist overlay position to `$XDG_CONFIG_HOME/portrait/position`.
+/// Persist overlay position to `$XDG_CONFIG_HOME/talking-head/position`.
 pub fn save_position(right: i32, top: i32) {
     let dir = config_dir();
     if std::fs::create_dir_all(&dir).is_ok() {

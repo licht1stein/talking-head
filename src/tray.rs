@@ -50,17 +50,17 @@ fn load_tray_icon() -> Vec<ksni::Icon> {
 
 /// Internal tray struct implementing the `ksni::Tray` trait.
 /// Holds a channel sender to forward user actions to the daemon loop.
-struct PortraitTray {
+struct TalkingHeadTray {
     tx: mpsc::Sender<ipc::Command>,
 }
 
-impl ksni::Tray for PortraitTray {
+impl ksni::Tray for TalkingHeadTray {
     fn id(&self) -> String {
-        "portrait".into()
+        "talking-head".into()
     }
 
     fn title(&self) -> String {
-        "Portrait".into()
+        "Talking Head".into()
     }
 
     fn icon_name(&self) -> String {
@@ -137,7 +137,7 @@ impl TrayIcon {
     /// The `ksni::TrayService` runs its own D-Bus event loop in a separate
     /// thread, so this does not block the caller.
     pub fn spawn(tx: mpsc::Sender<ipc::Command>) {
-        let tray = PortraitTray { tx };
+        let tray = TalkingHeadTray { tx };
         let service = ksni::TrayService::new(tray);
         service.spawn();
     }

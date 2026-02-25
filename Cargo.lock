@@ -1084,26 +1084,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "portrait"
-version = "0.1.0"
-dependencies = [
- "clap 4.5.60",
- "gdk4",
- "gio",
- "glib 0.21.5",
- "gstreamer",
- "gstreamer-app",
- "gstreamer-video",
- "gtk4",
- "gtk4-layer-shell",
- "ksni",
- "nix",
- "png",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "proc-macro-crate"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1249,6 +1229,26 @@ dependencies = [
  "pkg-config",
  "toml",
  "version-compare",
+]
+
+[[package]]
+name = "talking-head"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.60",
+ "gdk4",
+ "gio",
+ "glib 0.21.5",
+ "gstreamer",
+ "gstreamer-app",
+ "gstreamer-video",
+ "gtk4",
+ "gtk4-layer-shell",
+ "ksni",
+ "nix",
+ "png",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

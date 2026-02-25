@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
-#[command(name = "portrait", about = "Webcam circle overlay for Wayland", version)]
+#[command(name = "talking-head", about = "Webcam talking head overlay for Wayland", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -9,7 +9,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Start the portrait daemon and show the camera overlay
+    /// Start the talking-head daemon and show the camera overlay
     Start {
         /// Webcam device path (e.g. /dev/video0)
         #[arg(long, short = 'd')]
@@ -24,7 +24,7 @@ pub enum Commands {
         foreground: bool,
     },
 
-    /// Stop the portrait daemon
+    /// Stop the talking-head daemon
     Stop,
 
     /// Toggle camera overlay visibility
@@ -45,7 +45,7 @@ pub enum Commands {
     /// Open the webcam selection dialog
     Select,
 
-    /// Install portrait to ~/.local (binary, icon, desktop entry)
+    /// Install talking-head to ~/.local (binary, icon, desktop entry)
     Install,
 }
 

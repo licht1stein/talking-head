@@ -19,7 +19,7 @@ fn size_to_px(val: &SizeValue) -> u32 {
     }
 }
 
-/// Run the portrait daemon.
+/// Run the talking-head daemon.
 ///
 /// This owns the GTK application, overlay window, camera pipeline, and IPC
 /// dispatch loop. It blocks until the application quits (via IPC Stop command
@@ -28,7 +28,7 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
     // Daemonize before any GTK/GLib/GStreamer init if not foreground
     if !foreground {
         nix::unistd::daemon(false, false).unwrap_or_else(|e| {
-            eprintln!("portrait: failed to daemonize: {}", e);
+            eprintln!("talking-head: failed to daemonize: {}", e);
             std::process::exit(1);
         });
     }
@@ -38,7 +38,7 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
 
     // Init GStreamer
     gst::init().unwrap_or_else(|e| {
-        eprintln!("portrait: failed to init GStreamer: {}", e);
+        eprintln!("talking-head: failed to init GStreamer: {}", e);
         cleanup_and_exit(1);
     });
 
@@ -64,14 +64,14 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
         let camera = match CameraPipeline::new(device_path, size_val) {
             Ok(cam) => {
                 if let Err(e) = cam.start() {
-                    eprintln!("portrait: failed to start camera: {}", e);
+                    eprintln!("talking-head: failed to start camera: {}", e);
                 }
                 // Connect appsink frames to the overlay drawing area
                 cam.setup_frame_callback(overlay.frame_store(), overlay.drawing_area().clone());
                 Some(cam)
             }
             Err(e) => {
-                eprintln!("portrait: failed to create camera pipeline: {}", e);
+                eprintln!("talking-head: failed to create camera pipeline: {}", e);
                 overlay.show_placeholder();
                 None
             }
@@ -101,7 +101,7 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
                         use gstreamer::MessageView;
                         match msg.view() {
                             MessageView::Error(err) => {
-                                eprintln!("portrait: camera error: {}", err.error());
+                                eprintln!("talking-head: camera error: {}", err.error());
                                 // Stop pipeline and show placeholder
                                 if let Some(ref cam) = *camera_for_bus.borrow() {
                                     cam.stop();
@@ -117,7 +117,7 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
                                 return glib::ControlFlow::Break;
                             }
                             MessageView::Eos(_) => {
-                                eprintln!("portrait: camera stream ended");
+                                eprintln!("talking-head: camera stream ended");
                                 overlay_for_bus.borrow().show_placeholder();
                             }
                             _ => {}
@@ -134,7 +134,7 @@ pub fn run(device: Option<String>, size: u32, foreground: bool) {
 
         // Start IPC server (sends commands to ipc_tx)
         if let Err(e) = ipc::start_server(ipc_tx) {
-            eprintln!("portrait: failed to start IPC server: {}", e);
+            eprintln!("talking-head: failed to start IPC server: {}", e);
         }
         // Wrap receiver in Rc<RefCell> so the closure can own it
         let ipc_rx = Rc::new(RefCell::new(ipc_rx));
@@ -337,11 +337,11 @@ fn schedule_reconnect(
             Ok(cam) => {
                 cam.setup_frame_callback(overlay.borrow().frame_store(), overlay.borrow().drawing_area().clone());
                 if let Err(e) = cam.start() {
-                    eprintln!("portrait: reconnect start failed: {}", e);
+                    eprintln!("talking-head: reconnect start failed: {}", e);
                     overlay.borrow().show_placeholder();
                     schedule_reconnect(camera, overlay, device, size);
                 } else {
-                    eprintln!("portrait: camera reconnected");
+                    eprintln!("talking-head: camera reconnected");
                     // Set up bus monitoring for the new pipeline
                     if let Some(bus) = cam.bus() {
                         let overlay_for_bus = Rc::clone(&overlay);
@@ -354,7 +354,7 @@ fn schedule_reconnect(
                                 use gstreamer::MessageView;
                                 match msg.view() {
                                     MessageView::Error(err) => {
-                                        eprintln!("portrait: camera error: {}", err.error());
+                                        eprintln!("talking-head: camera error: {}", err.error());
                                         if let Some(ref cam) = *camera_for_bus.borrow() {
                                             cam.stop();
                                         }
@@ -368,7 +368,7 @@ fn schedule_reconnect(
                                         return glib::ControlFlow::Break;
                                     }
                                     MessageView::Eos(_) => {
-                                        eprintln!("portrait: camera stream ended");
+                                        eprintln!("talking-head: camera stream ended");
                                         overlay_for_bus.borrow().show_placeholder();
                                     }
                                     _ => {}
@@ -381,7 +381,7 @@ fn schedule_reconnect(
                 }
             }
             Err(e) => {
-                eprintln!("portrait: reconnect failed: {}", e);
+                eprintln!("talking-head: reconnect failed: {}", e);
                 schedule_reconnect(camera, overlay, device, size);
             }
         }

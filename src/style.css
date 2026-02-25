@@ -1,7 +1,7 @@
-/* Portrait - webcam circle overlay */
-/* .portrait-circle is no longer used — clipping is done via Cairo in DrawingArea */
+/* Talking Head - webcam circle overlay */
+/* .talking-head-circle is no longer used — clipping is done via Cairo in DrawingArea */
 
-window.portrait-overlay {
+window.talking-head-overlay {
     background: transparent;
     border: none;
 }

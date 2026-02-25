@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Talking Head
+Comment=Webcam talking head overlay for screen recording
+Exec=talking-head start
+Icon=talking-head
+Terminal=false
+Categories=Video;Utility;
+StartupNotify=false

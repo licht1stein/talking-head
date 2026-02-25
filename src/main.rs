@@ -16,12 +16,12 @@ fn main() {
         Commands::Start { device, size, foreground } => {
             // Check if already running
             if ipc::is_already_running() {
-                eprintln!("portrait: daemon is already running");
+                eprintln!("talking-head: daemon is already running");
                 std::process::exit(1);
             }
 
             let size_px = Commands::parse_size(&size).unwrap_or_else(|e| {
-                eprintln!("portrait: {}", e);
+                eprintln!("talking-head: {}", e);
                 std::process::exit(1);
             });
 
@@ -43,7 +43,7 @@ fn main() {
                     println!("{}", serde_json::to_string_pretty(&data).unwrap());
                 }
                 ipc::Response::Error(e) => {
-                    eprintln!("portrait: {}", e);
+                    eprintln!("talking-head: {}", e);
                     std::process::exit(1);
                 }
                 ipc::Response::Ok => {
@@ -80,11 +80,11 @@ fn send_or_exit(cmd: ipc::Command) {
     match ipc::send_command(&cmd) {
         Ok(ipc::Response::Ok) | Ok(ipc::Response::OkData(_)) => {}
         Ok(ipc::Response::Error(e)) => {
-            eprintln!("portrait: daemon error: {}", e);
+            eprintln!("talking-head: daemon error: {}", e);
             std::process::exit(1);
         }
         Err(e) => {
-            eprintln!("portrait: {}", e);
+            eprintln!("talking-head: {}", e);
             std::process::exit(1);
         }
     }
@@ -94,7 +94,7 @@ fn send_command_or_exit(cmd: ipc::Command) -> ipc::Response {
     match ipc::send_command(&cmd) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("portrait: {}", e);
+            eprintln!("talking-head: {}", e);
             std::process::exit(1);
         }
     }
@@ -107,7 +107,7 @@ fn parse_size_value(s: &str) -> ipc::SizeValue {
         "large" => ipc::SizeValue::Large,
         _ => {
             let px = s.parse::<u32>().unwrap_or_else(|_| {
-                eprintln!("portrait: invalid size '{}': use small/medium/large or pixels", s);
+                eprintln!("talking-head: invalid size '{}': use small/medium/large or pixels", s);
                 std::process::exit(1);
             });
             ipc::SizeValue::Custom(px)
@@ -120,23 +120,23 @@ fn install_local() {
     use std::path::PathBuf;
 
     let home = std::env::var("HOME").unwrap_or_else(|_| {
-        eprintln!("portrait: $HOME not set");
+        eprintln!("talking-head: $HOME not set");
         std::process::exit(1);
     });
 
     // 1. Copy binary
     let bin_dir = PathBuf::from(&home).join(".local/bin");
     fs::create_dir_all(&bin_dir).unwrap_or_else(|e| {
-        eprintln!("portrait: failed to create {}: {}", bin_dir.display(), e);
+        eprintln!("talking-head: failed to create {}: {}", bin_dir.display(), e);
         std::process::exit(1);
     });
-    let bin_dst = bin_dir.join("portrait");
+    let bin_dst = bin_dir.join("talking-head");
     let bin_src = std::env::current_exe().unwrap_or_else(|e| {
-        eprintln!("portrait: cannot find current binary: {}", e);
+        eprintln!("talking-head: cannot find current binary: {}", e);
         std::process::exit(1);
     });
     fs::copy(&bin_src, &bin_dst).unwrap_or_else(|e| {
-        eprintln!("portrait: failed to copy binary: {}", e);
+        eprintln!("talking-head: failed to copy binary: {}", e);
         std::process::exit(1);
     });
     // Make executable
@@ -152,13 +152,13 @@ fn install_local() {
     // 2. Write icon
     let icon_dir = PathBuf::from(&home).join(".local/share/icons/hicolor/512x512/apps");
     fs::create_dir_all(&icon_dir).unwrap_or_else(|e| {
-        eprintln!("portrait: failed to create {}: {}", icon_dir.display(), e);
+        eprintln!("talking-head: failed to create {}: {}", icon_dir.display(), e);
         std::process::exit(1);
     });
-    let icon_dst = icon_dir.join("portrait.png");
+    let icon_dst = icon_dir.join("talking-head.png");
     const ICON_BYTES: &[u8] = include_bytes!("../assets/tray_icon.png");
     fs::write(&icon_dst, ICON_BYTES).unwrap_or_else(|e| {
-        eprintln!("portrait: failed to write icon: {}", e);
+        eprintln!("talking-head: failed to write icon: {}", e);
         std::process::exit(1);
     });
     println!("installed icon    → {}", icon_dst.display());
@@ -166,13 +166,13 @@ fn install_local() {
     // 3. Write .desktop file
     let apps_dir = PathBuf::from(&home).join(".local/share/applications");
     fs::create_dir_all(&apps_dir).unwrap_or_else(|e| {
-        eprintln!("portrait: failed to create {}: {}", apps_dir.display(), e);
+        eprintln!("talking-head: failed to create {}: {}", apps_dir.display(), e);
         std::process::exit(1);
     });
-    let desktop_dst = apps_dir.join("portrait.desktop");
-    const DESKTOP: &str = include_str!("../assets/portrait.desktop");
+    let desktop_dst = apps_dir.join("talking-head.desktop");
+    const DESKTOP: &str = include_str!("../assets/talking-head.desktop");
     fs::write(&desktop_dst, DESKTOP).unwrap_or_else(|e| {
-        eprintln!("portrait: failed to write .desktop file: {}", e);
+        eprintln!("talking-head: failed to write .desktop file: {}", e);
         std::process::exit(1);
     });
     println!("installed desktop → {}", desktop_dst.display());

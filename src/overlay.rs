@@ -52,7 +52,7 @@ impl OverlayWindow {
         window.set_layer(Layer::Top);
         window.set_exclusive_zone(-1);
         window.set_keyboard_mode(KeyboardMode::None);
-        window.set_namespace(Some("portrait"));
+        window.set_namespace(Some("talking-head"));
 
         // Anchor Top+Left so margins position relative to output top-left
         // Anchor Top+Right so we position from the upper-right corner
@@ -62,7 +62,7 @@ impl OverlayWindow {
         window.set_margin(Edge::Right, init_right);
 
         // Add CSS class for transparent background
-        window.add_css_class("portrait-overlay");
+        window.add_css_class("talking-head-overlay");
 
         // Shared frame store for DrawingArea ↔ camera callback
         let frame_store: FrameStore = Rc::new(RefCell::new(None));
