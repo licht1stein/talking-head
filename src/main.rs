@@ -170,8 +170,11 @@ fn install_local() {
         std::process::exit(1);
     });
     let desktop_dst = apps_dir.join("talking-head.desktop");
-    const DESKTOP: &str = include_str!("../assets/talking-head.desktop");
-    fs::write(&desktop_dst, DESKTOP).unwrap_or_else(|e| {
+    let desktop_content = format!(
+        "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Talking Head\nComment=Webcam talking head overlay for screen recording\nExec=talking-head start\nIcon={}\nTerminal=false\nCategories=Video;Utility;\nStartupNotify=false\n",
+        icon_dst.display()
+    );
+    fs::write(&desktop_dst, &desktop_content).unwrap_or_else(|e| {
         eprintln!("talking-head: failed to write .desktop file: {}", e);
         std::process::exit(1);
     });
