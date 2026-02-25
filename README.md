@@ -191,6 +191,10 @@ There is no configuration file. All settings are controlled via CLI flags.
 - **ksni** registers a StatusNotifierItem for the system tray
 - **Unix socket IPC** (`$XDG_RUNTIME_DIR/talking-head.sock`) connects CLI commands to the running daemon
 
+## Acknowledgments
+
+Inspired by [webcam-layer](https://github.com/timinou/webcam-layer) by [@timinou](https://github.com/timinou) — thanks for the idea!
+
 ## License
 
 [Mozilla Public License 2.0](LICENSE)
